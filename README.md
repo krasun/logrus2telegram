@@ -18,7 +18,20 @@ go get github.com/krasun/logrus2telegram
 ## Usage 
 
 ```go
+package main
 
+import (
+	log "github.com/sirupsen/logrus"
+	
+	"github.com/krasun/logrus2telegram"
+)
+
+func main() {	
+	hook, err := logrus2telegram.NewHook(<token>, []int64{<chat identifier>})
+	if err != nil {
+		// ...
+	}
+	log.AddHook(hook)
 ```
 
 ## Tests 
