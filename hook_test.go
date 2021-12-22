@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -212,7 +211,7 @@ func TestErrorsInFormat(t *testing.T) {
 	log.Infof("some_log_message")
 	w.Close()
 
-	output, err := io.ReadAll(r)
+	output, err := ioutil.ReadAll(r)
 	if err != nil {
 		t.Errorf("failed to read all from stderr: %s", err)
 	}
