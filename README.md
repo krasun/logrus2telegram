@@ -31,10 +31,10 @@ func main() {
 		<token>, 
 		[]int64{<chat identifier>},
 		// the levels of messages sent to Telegram
-		// default: []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel, logrus.WarnLevel, logrus.InfoLevel}
+		// default: []log.Level{log.ErrorLevel, log.FatalLevel, log.PanicLevel, log.WarnLevel, log.InfoLevel}		InfoLevel}
 		logrus2telegram.Levels(log.AllLevels),
-		// default: []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel, logrus.WarnLevel, logrus.InfoLevel}
 		// the levels of messages sent to Telegram with notifications
+		// default: []log.Level{log.ErrorLevel, log.FatalLevel, log.PanicLevel, log.WarnLevel, log.InfoLevel}		
 		logrus2telegram.NotifyOn([]log.Level{log.PanicLevel, log.FatalLevel, log.ErrorLevel, log.InfoLevel}),
 		// default: 3 * time.second
 		logrus2telegram.RequestTimeout(10*time.Second),
