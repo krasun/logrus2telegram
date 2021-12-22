@@ -38,6 +38,7 @@ type config struct {
 // Option configures the hook instance.
 type Option func(*config) error
 
+// UseClient sets custom HTTP client for hook.
 func UseClient(httpClient *http.Client) Option {
 	return func(h *config) error {
 		if httpClient == nil {
