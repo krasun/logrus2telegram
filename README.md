@@ -27,7 +27,22 @@ import (
 )
 
 func main() {	
-	hook, err := logrus2telegram.NewHook(<token>, []int64{<chat identifier>})
+	hook, err := logrus2telegram.NewHook(
+		<token>, 
+		[]int64{<chat identifier>},
+		// the levels of messages sent to Telegram
+		// default: []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel, logrus.WarnLevel, logrus.InfoLevel}
+		logrus2telegram.Levels(log.AllLevels),
+		// default: []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel, logrus.WarnLevel, logrus.InfoLevel}
+		// the levels of messages sent to Telegram with notifications
+		logrus2telegram.NotifyOn([]log.Level{log.PanicLevel, log.FatalLevel, log.ErrorLevel, log.InfoLevel}),
+		// default: 3 * time.second
+		logrus2telegram.RequestTimeout(10*time.Second),
+		// default: entry.String() time="2021-12-22T14:48:56+02:00" level=debug msg="example"
+		logrus2telegram.Format(func(e *log.Entry) (string, error) {
+			return fmt.Sprintf("%s %s", strings.ToUpper(e.Level.String()), e.Message), nil
+		}),
+	)
 	if err != nil {
 		// ...
 	}
