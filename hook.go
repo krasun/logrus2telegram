@@ -12,14 +12,17 @@ import (
 	"net/http"
 )
 
+const sendMessageURLTemplate = "https://api.telegram.org/bot%s/sendMessage"
+
 // TelegramBotHook is a hook for Logrus logging library to send logs directly to Telegram.
 type TelegramBotHook struct {
-	levels   []logrus.Level
-	notifyOn map[logrus.Level]struct{}
-	client   *http.Client
-	url      string
-	chatIDs  []int64
-	format   func(e *logrus.Entry) (string, error)
+	levels         []logrus.Level
+	notifyOn       map[logrus.Level]struct{}
+	client         *http.Client
+	url            string
+	chatIDs        []int64
+	format         func(e *logrus.Entry) (string, error)
+	requestTimeout time.Duration
 }
 
 // config for hook.
@@ -28,10 +31,23 @@ type config struct {
 	notifyOn       map[logrus.Level]struct{}
 	requestTimeout time.Duration
 	format         func(e *logrus.Entry) (string, error)
+	client         *http.Client
 }
 
 // Option configures the hook instance.
 type Option func(*config) error
+
+func UseClient(httpClient *http.Client) Option {
+	return func(h *config) error {
+		if httpClient == nil {
+			return errors.New("HTTP client is not specified")
+		}
+
+		h.client = httpClient
+
+		return nil
+	}
+}
 
 // NotifyOn enables notification in messages for specified log levels.
 func NotifyOn(levels []logrus.Level) Option {
@@ -107,6 +123,7 @@ func NewHook(token string, chatIDs []int64, options ...Option) (*TelegramBotHook
 		format:         defaultFormat,
 		notifyOn:       make(map[logrus.Level]struct{}),
 		requestTimeout: 3 * time.Second,
+		client:         &http.Client{},
 	}
 
 	for _, option := range options {
@@ -116,9 +133,11 @@ func NewHook(token string, chatIDs []int64, options ...Option) (*TelegramBotHook
 		}
 	}
 
+	cfg.client.Timeout = cfg.requestTimeout
+
 	return &TelegramBotHook{
-		client:   &http.Client{Timeout: cfg.requestTimeout},
-		url:      fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token),
+		client:   cfg.client,
+		url:      fmt.Sprintf(sendMessageURLTemplate, token),
 		chatIDs:  chatIDs,
 		format:   cfg.format,
 		notifyOn: cfg.notifyOn,
@@ -157,7 +176,7 @@ func (h *TelegramBotHook) Fire(entry *logrus.Entry) error {
 		if err != nil {
 			return fmt.Errorf("failed to send HTTP request to Telegram API: %w", err)
 		} else if response.StatusCode != http.StatusOK {
-			return fmt.Errorf("")
+			return fmt.Errorf("response status code is not 200, it is %d", response.StatusCode)
 		}
 
 		if err := response.Body.Close(); err != nil {
