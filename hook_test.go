@@ -96,7 +96,7 @@ func TestSendRequestWithDefaultFormat(t *testing.T) {
 	log := logrus.New()
 	log.SetFormatter(&logrus.TextFormatter{DisableTimestamp: true})
 
-	client := newClient(func(req *http.Request) *http.Response {
+	client := newClient(func(req *http.Request) (*http.Response, error) {
 		expectedURL, _ := url.Parse("https://api.telegram.org/bottest_token/sendMessage")
 		equals(t, expectedURL, req.URL)
 
@@ -121,7 +121,7 @@ func TestSendRequestWithDefaultFormat(t *testing.T) {
 			StatusCode: 200,
 			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte{})),
 			Header:     make(http.Header),
-		}
+		}, nil
 	})
 
 	hook, err := logrus2telegram.NewHook(
@@ -140,7 +140,7 @@ func TestSendRequestWithDefaultFormat(t *testing.T) {
 func TestSendRequestWithCustomFormat(t *testing.T) {
 	log := logrus.New()
 
-	client := newClient(func(req *http.Request) *http.Response {
+	client := newClient(func(req *http.Request) (*http.Response, error) {
 		expectedURL, _ := url.Parse("https://api.telegram.org/bottest_token/sendMessage")
 		equals(t, expectedURL, req.URL)
 
@@ -165,7 +165,7 @@ func TestSendRequestWithCustomFormat(t *testing.T) {
 			StatusCode: 200,
 			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte{})),
 			Header:     make(http.Header),
-		}
+		}, nil
 	})
 
 	hook, err := logrus2telegram.NewHook(
@@ -183,6 +183,92 @@ func TestSendRequestWithCustomFormat(t *testing.T) {
 	log.AddHook(hook)
 
 	log.Infof("some_log_message")
+}
+
+func TestErrorsInHTTP(t *testing.T) {
+	log := logrus.New()
+
+	client := newClient(func(req *http.Request) (*http.Response, error) {
+		return nil, errors.New("some HTTP error")
+	})
+
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.UseClient(client),
+	)
+	ok(t, err)
+	log.AddHook(hook)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Errorf("failed to create OS pipe: %s", err)
+	}
+	defer w.Close()
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	log.Infof("some_log_message")
+
+	w.Close()
+
+	output, err := ioutil.ReadAll(r)
+	if err != nil {
+		t.Errorf("failed to read all from stderr: %s", err)
+	}
+
+	fmt.Println(string(output))
+
+	if !strings.Contains(string(output), "Failed to fire hook: failed to send HTTP request to Telegram API") {
+		t.Errorf("failed to fail hook")
+	}
+}
+
+func TestErrorsInHTTPStatusCode(t *testing.T) {
+	log := logrus.New()
+
+	client := newClient(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 400,
+			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte{})),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.UseClient(client),
+	)
+	ok(t, err)
+	log.AddHook(hook)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Errorf("failed to create OS pipe: %s", err)
+	}
+	defer w.Close()
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	log.Infof("some_log_message")
+
+	w.Close()
+
+	output, err := ioutil.ReadAll(r)
+	if err != nil {
+		t.Errorf("failed to read all from stderr: %s", err)
+	}
+
+	fmt.Println(string(output))
+
+	if !strings.Contains(string(output), "Failed to fire hook: response status code is not 200, it is 400") {
+		t.Errorf("failed to fail hook")
+	}
 }
 
 func TestErrorsInFormat(t *testing.T) {
@@ -239,10 +325,10 @@ func equals(tb testing.TB, exp, act interface{}) {
 	}
 }
 
-type roundTripper func(req *http.Request) *http.Response
+type roundTripper func(req *http.Request) (*http.Response, error)
 
 func (rt roundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return rt(request), nil
+	return rt(request)
 }
 
 func newClient(roundTripper roundTripper) *http.Client {
