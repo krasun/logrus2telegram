@@ -3,13 +3,17 @@ package logrus2telegram_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,6 +58,18 @@ func TestNotifyOnErrorOnEmpty(t *testing.T) {
 	}
 }
 
+func TestFormatErrorOnNil(t *testing.T) {
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.Format(nil),
+	)
+
+	if hook != nil || err == nil {
+		t.Errorf("expected error, but got nil")
+	}
+}
+
 func TestRequestTimeoutErrorOnNegativeTimeout(t *testing.T) {
 	hook, err := logrus2telegram.NewHook(
 		"test_token",
@@ -77,7 +93,52 @@ func TestErrorOnEmptyChatIDs(t *testing.T) {
 	}
 }
 
-func TestSendRequest(t *testing.T) {
+func TestSendRequestWithDefaultFormat(t *testing.T) {
+	log := logrus.New()
+	log.SetFormatter(&logrus.TextFormatter{DisableTimestamp: true})
+
+	client := newClient(func(req *http.Request) *http.Response {
+		expectedURL, _ := url.Parse("https://api.telegram.org/bottest_token/sendMessage")
+		equals(t, expectedURL, req.URL)
+
+		expected := struct {
+			ChatID              int64  `json:"chat_id"`
+			Text                string `json:"text"`
+			DisableNotification bool   `json:"disable_notification"`
+		}{
+			42,
+			"level=info msg=some_log_message\n",
+			false,
+		}
+		actual := expected
+
+		reader, err := req.GetBody()
+		ok(t, err)
+		json.NewDecoder(reader).Decode(&actual)
+
+		equals(t, expected, actual)
+
+		return &http.Response{
+			StatusCode: 200,
+			Body:       ioutil.NopCloser(bytes.NewBuffer([]byte{})),
+			Header:     make(http.Header),
+		}
+	})
+
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.UseClient(client),
+		logrus2telegram.Levels(logrus.AllLevels),
+		logrus2telegram.RequestTimeout(3*time.Second),
+	)
+	ok(t, err)
+	log.AddHook(hook)
+
+	log.Infof("some_log_message")
+}
+
+func TestSendRequestWithCustomFormat(t *testing.T) {
 	log := logrus.New()
 
 	client := newClient(func(req *http.Request) *http.Response {
@@ -123,6 +184,42 @@ func TestSendRequest(t *testing.T) {
 	log.AddHook(hook)
 
 	log.Infof("some_log_message")
+}
+
+func TestErrorsInFormat(t *testing.T) {
+	log := logrus.New()
+
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.Format(func(e *logrus.Entry) (string, error) {
+			return "", errors.New("some err")
+		}),
+	)
+	ok(t, err)
+	log.AddHook(hook)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Errorf("failed to create OS pipe: %s", err)
+	}
+	defer w.Close()
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	log.Infof("some_log_message")
+	w.Close()
+
+	output, err := io.ReadAll(r)
+	if err != nil {
+		t.Errorf("failed to read all from stderr: %s", err)
+	}
+
+	if !strings.Contains(string(output), "Failed to fire hook: failed to format log entry: some err") {
+		t.Errorf("failed to fail hook")
+	}
 }
 
 // ok fails the test if an err is not nil.
