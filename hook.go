@@ -1,6 +1,7 @@
 package logrus2telegram
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -118,30 +119,28 @@ func NewHook(token string, chatIDs []int64, options ...Option) (*TelegramBotHook
 		return nil, errors.New("at least one chatID is required")
 	}
 
-	cfg := &config{
+	c := &config{
 		levels:         []logrus.Level{logrus.ErrorLevel, logrus.FatalLevel, logrus.PanicLevel, logrus.WarnLevel, logrus.InfoLevel},
 		format:         defaultFormat,
 		notifyOn:       make(map[logrus.Level]struct{}),
 		requestTimeout: 3 * time.Second,
 		client:         &http.Client{},
 	}
-
 	for _, option := range options {
-		err := option(cfg)
+		err := option(c)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	cfg.client.Timeout = cfg.requestTimeout
-
 	return &TelegramBotHook{
-		client:   cfg.client,
-		url:      fmt.Sprintf(sendMessageURLTemplate, token),
-		chatIDs:  chatIDs,
-		format:   cfg.format,
-		notifyOn: cfg.notifyOn,
-		levels:   cfg.levels,
+		client:         c.client,
+		url:            fmt.Sprintf(sendMessageURLTemplate, token),
+		chatIDs:        chatIDs,
+		format:         c.format,
+		notifyOn:       c.notifyOn,
+		levels:         c.levels,
+		requestTimeout: c.requestTimeout,
 	}, nil
 }
 
@@ -166,7 +165,10 @@ func (h *TelegramBotHook) Fire(entry *logrus.Entry) error {
 			return err
 		}
 
-		request, err := http.NewRequest(http.MethodPost, h.url, bytes.NewBuffer(encoded))
+		ctx, cancel := context.WithTimeout(context.Background(), h.requestTimeout)
+		defer cancel()
+
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewBuffer(encoded))
 		if err != nil {
 			return err
 		}
