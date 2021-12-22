@@ -2,6 +2,7 @@ package logrus2telegram_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -10,20 +11,95 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/krasun/logrus2telegram"
 )
 
-func TestSimple(t *testing.T) {
+func TestUseClientErrorOnNil(t *testing.T) {
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.UseClient(nil),
+	)
+
+	if hook != nil || err == nil {
+		t.Errorf("expected error, but got nil")
+	}
+}
+
+func TestLevelsErrorOnEmptyLevels(t *testing.T) {
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.Levels([]logrus.Level{}),
+	)
+
+	if hook != nil || err == nil {
+		t.Errorf("expected error, but got nil")
+	}
+}
+
+func TestNotifyOnErrorOnEmpty(t *testing.T) {
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.NotifyOn([]logrus.Level{}),
+	)
+
+	if hook != nil || err == nil {
+		t.Errorf("expected error, but got nil")
+	}
+}
+
+func TestRequestTimeoutErrorOnNegativeTimeout(t *testing.T) {
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{42},
+		logrus2telegram.RequestTimeout(-1*time.Second),
+	)
+
+	if hook != nil || err == nil {
+		t.Errorf("expected error, but got nil")
+	}
+}
+
+func TestErrorOnEmptyChatIDs(t *testing.T) {
+	hook, err := logrus2telegram.NewHook(
+		"test_token",
+		[]int64{},
+	)
+
+	if hook != nil || err == nil {
+		t.Errorf("expected error, but got nil")
+	}
+}
+
+func TestSendRequest(t *testing.T) {
 	log := logrus.New()
 
 	client := newClient(func(req *http.Request) *http.Response {
 		expectedURL, _ := url.Parse("https://api.telegram.org/bottest_token/sendMessage")
 		equals(t, expectedURL, req.URL)
 
-		// TODO: test body
+		expected := struct {
+			ChatID              int64  `json:"chat_id"`
+			Text                string `json:"text"`
+			DisableNotification bool   `json:"disable_notification"`
+		}{
+			42,
+			"info:some_log_message",
+			false,
+		}
+		actual := expected
+
+		reader, err := req.GetBody()
+		ok(t, err)
+		json.NewDecoder(reader).Decode(&actual)
+
+		equals(t, expected, actual)
 
 		return &http.Response{
 			StatusCode: 200,
@@ -39,6 +115,9 @@ func TestSimple(t *testing.T) {
 		logrus2telegram.Format(func(e *logrus.Entry) (string, error) {
 			return fmt.Sprintf("%s:%s", e.Level, e.Message), nil
 		}),
+		logrus2telegram.Levels(logrus.AllLevels),
+		logrus2telegram.NotifyOn(logrus.AllLevels),
+		logrus2telegram.RequestTimeout(3*time.Second),
 	)
 	ok(t, err)
 	log.AddHook(hook)
