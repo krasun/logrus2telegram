@@ -5,7 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/krasun/logrus2telegram)](https://goreportcard.com/report/github.com/krasun/logrus2telegram)
 [![GoDoc](https://godoc.org/https://godoc.org/github.com/krasun/logrus2telegram?status.svg)](https://godoc.org/github.com/krasun/logrus2telegram)
 
-`logrus2telegram` is a Telegram bot hook for [Logrus](https://github.com/sirupsen/logrus) logging library in Go.
+`logrus2telegram` is a Telegram bot hook for [Logrus logging library](https://github.com/sirupsen/logrus) in Go.
 
 ## Installation
 
