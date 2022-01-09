@@ -1,6 +1,6 @@
 # logrus2telegram
 
-[![Build Status](https://app.travis-ci.com/krasun/logrus2telegram.svg?branch=main)](https://app.travis-ci.com/krasun/logrus2telegram)
+[![Build](https://github.com/krasun/logrus2telegram/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/krasun/logrus2telegram/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/krasun/logrus2telegram/branch/main/graph/badge.svg?token=8NU6LR4FQD)](https://codecov.io/gh/krasun/logrus2telegram)
 [![Go Report Card](https://goreportcard.com/badge/github.com/krasun/logrus2telegram)](https://goreportcard.com/report/github.com/krasun/logrus2telegram)
 [![GoDoc](https://godoc.org/https://godoc.org/github.com/krasun/logrus2telegram?status.svg)](https://godoc.org/github.com/krasun/logrus2telegram)
